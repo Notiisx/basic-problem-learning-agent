@@ -85,6 +85,14 @@ def _call_llm(prompt: str) -> str:
         raise RuntimeError(
             "Cannot reach Ollama. Make sure it is running: `ollama serve`"
         )
+    except requests.exceptions.Timeout:
+        raise RuntimeError("Ollama request timed out. The model may be too slow or overloaded.")
+    except requests.exceptions.HTTPError as e:
+        raise RuntimeError(f"Ollama returned an error: {e}")
+    except requests.exceptions.RequestException as e:
+        raise RuntimeError(f"Ollama request failed: {e}")
+    except ValueError as e:
+        raise RuntimeError(f"Ollama returned invalid JSON: {e}")
 
 
 def _parse_response(raw: str) -> dict:

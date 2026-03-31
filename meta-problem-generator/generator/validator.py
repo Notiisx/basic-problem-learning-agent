@@ -6,6 +6,7 @@ reaching the student.
 """
 
 import os
+import sys
 import tempfile
 import subprocess
 from config import CODE_TIMEOUT_SECONDS
@@ -24,7 +25,7 @@ def _run_code(code: str, input_data: str) -> tuple[bool, str]:
 
     try:
         result = subprocess.run(
-            ["python3", fname],
+            [sys.executable, fname],
             input=input_data,
             text=True,
             capture_output=True,
