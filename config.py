@@ -10,11 +10,11 @@ OLLAMA_URL = "http://localhost:11434/api/generate"
 #   deepseek-coder   ← best for programming problems
 #   llama3           ← best for math / number theory
 #   codellama        ← alternative coding model
-MODEL = "deepseek-coder"
+MODEL = "qwen2.5-coder:3b"
 
 # ── Difficulty / ELO ──────────────────────────
-STARTING_SKILL      = 1200   # ELO starting point
-STARTING_DIFFICULTY = 1200
+STARTING_SKILL      = 800    # ELO starting point
+STARTING_DIFFICULTY = 800
 ELO_K_FACTOR        = 20     # how fast skill updates
 TARGET_SOLVE_RATE   = 0.60   # aim for 60% success rate
 

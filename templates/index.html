@@ -456,6 +456,24 @@
   .run-btn:hover { background: #6bffcc; }
   .run-btn:disabled { opacity: 0.4; cursor: not-allowed; }
 
+  .manual-btn {
+    padding: 9px 14px;
+    border: none;
+    border-radius: 6px;
+    font-family: var(--mono);
+    font-size: 11px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.15s;
+    letter-spacing: 0.05em;
+  }
+
+  .manual-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+  .correct-btn { background: rgba(79,255,176,0.15); color: var(--green); border: 1px solid var(--green); }
+  .correct-btn:not(:disabled):hover { background: rgba(79,255,176,0.3); }
+  .wrong-btn   { background: rgba(255,77,109,0.15);  color: var(--red);   border: 1px solid var(--red); }
+  .wrong-btn:not(:disabled):hover   { background: rgba(255,77,109,0.3); }
+
   /* Verdict */
   .verdict-panel {
     padding: 10px 16px;
@@ -675,6 +693,8 @@
 
         <div class="code-footer">
           <button class="run-btn" id="run-btn" onclick="runCode()" disabled>▶ Run &amp; Judge</button>
+          <button class="manual-btn correct-btn" id="correct-btn" onclick="markManual(true)" disabled title="Mark as solved without running code">✓ Correct</button>
+          <button class="manual-btn wrong-btn" id="wrong-btn" onclick="markManual(false)" disabled title="Mark as incorrect without running code">✗ Incorrect</button>
           <span style="font-family:var(--mono);font-size:11px;color:var(--muted)" id="run-status"></span>
         </div>
       </div>
@@ -798,6 +818,8 @@
 
       renderProblem(data);
       document.getElementById('run-btn').disabled = false;
+      document.getElementById('correct-btn').disabled = false;
+      document.getElementById('wrong-btn').disabled = false;
       document.getElementById('code-editor').value = '';
 
       // FIX: use correct field names from /generate response
@@ -886,6 +908,29 @@
       document.getElementById('run-btn').disabled = false;
       document.getElementById('run-status').textContent = '';
     }
+  }
+
+  // ── Manual correct / incorrect ────────────────────────────────────────────
+  function markManual(solved) {
+    if (!currentProblem) { showToast('Generate a problem first!'); return; }
+
+    // Synthesise a fake judge result so the feedback flow works normally
+    judgeResult = {
+      verdict: solved ? 'PASS' : 'WRONG_ANSWER',
+      passed:  solved ? 1 : 0,
+      total:   1,
+      details: [{ test: 1, verdict: solved ? 'PASS' : 'WRONG_ANSWER' }],
+      manual:  true,
+    };
+
+    const panel = document.getElementById('verdict-panel');
+    if (solved) {
+      panel.innerHTML = '<span class="verdict-pass">✓ MARKED CORRECT (manual)</span>';
+    } else {
+      panel.innerHTML = '<span class="verdict-wrong">✗ MARKED INCORRECT (manual)</span>';
+    }
+
+    document.getElementById('feedback-bar').classList.add('visible');
   }
 
   function renderVerdict(r) {

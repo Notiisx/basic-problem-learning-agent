@@ -17,67 +17,99 @@ MATH_TOPICS = {"number_theory", "combinatorics", "modular_arithmetic"}
 
 # ── Prompt templates ──────────────────────────────────────────────────────────
 
-MATH_PROMPT = """You are an expert competitive math problem writer.
+MATH_PROMPT = """You are an expert competitive math problem setter writing in the style of Codeforces.
 
-Generate a rigorous math problem with the following properties:
+Generate a rigorous math problem with:
   Topic:      {topic}
-  Difficulty: {difficulty} (on an ELO scale; 1200 = intermediate)
+  Difficulty: {difficulty} (ELO; 1200 = Codeforces Div.2 B)
 
-You MUST respond in exactly this format and nothing else:
+Respond in EXACTLY this format — no extra text before or after:
 
-PROBLEM:
-<full problem statement, clearly worded, with a concrete numerical answer>
+TITLE:
+<short memorable problem title, no letter prefix>
 
-CONSTRAINTS:
-<any numerical constraints, e.g. 1 ≤ n ≤ 10^9>
+STATEMENT:
+<Narrative problem description 2-4 paragraphs. Use $...$ for inline math (e.g. $n$, $a_i$, $1 \\le n \\le 10^9$) and $$...$$ for displayed math. Define all variables clearly. Include a concrete scenario.>
+
+INPUT:
+<Precise input format. First line contains $t$ — number of test cases ($1 \\le t \\le 100$). Then describe each test case line by line. State all variable constraints here.>
+
+OUTPUT:
+<Precise output format. One line per test case.>
+
+NOTE:
+<Explain why each example output is correct. Reference test cases by number.>
 
 SOLUTION_EXPLANATION:
-<step-by-step solution explanation>
+<Step-by-step algorithm.>
 
 SOLUTION_CODE:
 ```python
-<a complete, runnable Python solution that reads from stdin and prints the answer>
+<Complete Python solution. Read t on first line, loop t times, print answer per test case.>
 ```
 
 TEST_CASES:
-<input1> | <expected_output1>
-<input2> | <expected_output2>
-<input3> | <expected_output3>
+===
+<complete stdin for judge run 1 — include t on line 1>
+---
+<expected stdout for run 1>
+===
+<complete stdin for judge run 2>
+---
+<expected stdout for run 2>
+===
+<complete stdin for judge run 3>
+---
+<expected stdout for run 3>
 
-Make sure SOLUTION_CODE reads input with input() and prints a single answer line.
-Make sure each TEST_CASE input matches exactly what the code reads.
-"""
+Each === block is one complete judge run. TEST_CASES must use EXACTLY the input format SOLUTION_CODE reads."""
 
-PROG_PROMPT = """You are an expert competitive programming problem setter.
+PROG_PROMPT = """You are an expert competitive programming problem setter writing in the style of Codeforces.
 
-Generate a competitive programming problem with the following properties:
+Generate a competitive programming problem with:
   Topic:      {topic}
-  Difficulty: {difficulty} (on an ELO scale; 1200 = intermediate Codeforces)
+  Difficulty: {difficulty} (ELO; 1200 = Codeforces Div.2 B)
 
-You MUST respond in exactly this format and nothing else:
+Respond in EXACTLY this format — no extra text before or after:
 
-PROBLEM:
-<full problem statement with example input/output>
+TITLE:
+<short memorable problem title, no letter prefix>
 
-CONSTRAINTS:
-<time limit, memory limit, variable ranges>
+STATEMENT:
+<Narrative problem description 2-4 paragraphs. Use $...$ for inline math (e.g. $n$, $a_i$, $1 \\le n \\le 10^9$) and $$...$$ for displayed math. Define all variables and operations clearly. Use a concrete story or scenario.>
+
+INPUT:
+<Precise input format. First line contains $t$ — number of test cases ($1 \\le t \\le 100$). Then describe each test case line by line. State all variable constraints here.>
+
+OUTPUT:
+<Precise output format. One line per test case unless otherwise specified.>
+
+NOTE:
+<Explain why each example output is correct. Reference specific test cases by number.>
 
 SOLUTION_EXPLANATION:
-<algorithm walkthrough>
+<Step-by-step algorithm and complexity.>
 
 SOLUTION_CODE:
 ```python
-<a complete, runnable Python solution that reads from stdin and prints the answer>
+<Complete Python solution. Read t on first line, loop t times, print answer per test case.>
 ```
 
 TEST_CASES:
-<input1> | <expected_output1>
-<input2> | <expected_output2>
-<input3> | <expected_output3>
+===
+<complete stdin for judge run 1 — include t on line 1>
+---
+<expected stdout for run 1>
+===
+<complete stdin for judge run 2>
+---
+<expected stdout for run 2>
+===
+<complete stdin for judge run 3>
+---
+<expected stdout for run 3>
 
-Make sure SOLUTION_CODE reads from stdin with input() and prints the answer.
-Make sure each TEST_CASE uses exactly the input format the code expects.
-"""
+Each === block is one complete judge run. TEST_CASES must use EXACTLY the input format SOLUTION_CODE reads."""
 
 
 def _call_llm(prompt: str) -> str:
@@ -86,7 +118,7 @@ def _call_llm(prompt: str) -> str:
         resp = requests.post(
             OLLAMA_URL,
             json={"model": MODEL, "prompt": prompt, "stream": False},
-            timeout=120,
+            timeout=300,
         )
         resp.raise_for_status()
         return resp.json().get("response", "")
@@ -111,25 +143,38 @@ def _parse_response(raw: str) -> dict:
         m = re.search(pattern, raw, re.DOTALL)
         return m.group(1).strip() if m else ""
 
-    # Extract solution code separately (inside ```python ... ```)
     code_match = re.search(r"```python\s*(.*?)```", raw, re.DOTALL)
     solution_code = code_match.group(1).strip() if code_match else ""
 
-    # Parse test cases: each line is "input | expected_output"
+    # Parse TEST_CASES: === separates runs, --- separates input from output
     test_block = extract("TEST_CASES")
     test_cases = []
-    for line in test_block.splitlines():
-        line = line.strip()
-        if "|" in line:
-            parts = line.split("|", 1)
-            inp = parts[0].strip()
-            out = parts[1].strip()
+    blocks = re.split(r'===', test_block)
+    for block in blocks:
+        block = block.strip()
+        if '---' in block:
+            parts = block.split('---', 1)
+            inp, out = parts[0].strip(), parts[1].strip()
             if inp and out:
                 test_cases.append((inp, out))
 
+    # Fallback: old single-line "input | output" format
+    if not test_cases:
+        for line in test_block.splitlines():
+            line = line.strip()
+            if '|' in line:
+                parts = line.split('|', 1)
+                inp, out = parts[0].strip(), parts[1].strip()
+                if inp and out:
+                    test_cases.append((inp, out))
+
     return {
-        "statement":            extract("PROBLEM"),
-        "constraints":          extract("CONSTRAINTS"),
+        "title":                extract("TITLE"),
+        "statement":            extract("STATEMENT"),
+        "input_format":         extract("INPUT"),
+        "output_format":        extract("OUTPUT"),
+        "note":                 extract("NOTE"),
+        "constraints":          "",
         "solution_explanation": extract("SOLUTION_EXPLANATION"),
         "solution_code":        solution_code,
         "test_cases":           test_cases,

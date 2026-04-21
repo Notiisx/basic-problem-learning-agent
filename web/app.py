@@ -39,7 +39,7 @@ from meta_learning.difficulty_model import (
 )
 from meta_learning.topic_weights import choose_topic, update_weights, get_topic_stats
 from feedback.feedback_store import store_session, get_summary, get_recent_solve_rate
-from config import MAX_VALIDATION_ATTEMPTS, TOPIC_LABELS
+from config import MAX_VALIDATION_ATTEMPTS, TOPIC_LABELS, MODEL
 
 app = Flask(
     __name__,
@@ -107,7 +107,8 @@ def stats():
         "student_skill":     skill,
         "topic_weights":     labeled_weights,
         "raw_topic_weights": weights,
-        "skill_history":     get_skill_history()[-20:],  # last 20 for charting
+        "skill_history":     get_skill_history()[-20:],
+        "model":             MODEL,
     })
 
 
@@ -157,34 +158,20 @@ def generate():
         "start_time": time.time(),
     })
 
-    # FIX: return all fields templates/index.html renderProblem() uses
     display_topic = TOPIC_LABELS.get(topic, topic.replace("_", " ").title())
-    statement     = problem["statement"]
-
-    # Try to split out input/output format sections if the LLM included them
-    input_format  = ""
-    output_format = ""
-    import re
-    m_in  = re.search(r"input\s*format[:\s]*(.*?)(?=output\s*format|constraints|$)",
-                      statement, re.IGNORECASE | re.DOTALL)
-    m_out = re.search(r"output\s*format[:\s]*(.*?)(?=constraints|$)",
-                      statement, re.IGNORECASE | re.DOTALL)
-    if m_in:
-        input_format  = m_in.group(1).strip()
-    if m_out:
-        output_format = m_out.group(1).strip()
 
     return jsonify({
-        "topic":            display_topic,
-        "raw_topic":        topic,
-        "difficulty":       difficulty,
-        "student_skill":    skill,
+        "topic":             display_topic,
+        "raw_topic":         topic,
+        "difficulty":        difficulty,
+        "student_skill":     skill,
         "solve_probability": round(p_solve, 3),
-        "title":            f"{display_topic} — ELO {difficulty}",
-        "statement":        problem["statement"],
-        "input_format":     input_format,
-        "output_format":    output_format,
-        "constraints":      problem["constraints"],
+        "title":             problem.get("title") or f"{display_topic} — ELO {difficulty}",
+        "statement":         problem.get("statement", ""),
+        "input_format":      problem.get("input_format", ""),
+        "output_format":     problem.get("output_format", ""),
+        "note":              problem.get("note", ""),
+        "examples":          problem.get("test_cases", [])[:2],
     })
 
 
@@ -250,14 +237,8 @@ def feedback():
     new_skill     = skill_update["new_skill"]
     next_diff     = recommend_difficulty(new_skill)
     weights       = get_topic_stats()
-
-    # FIX: templates/index.html checks clarity_warning
     clarity_warning = clarity_rating <= 2
-
-    # Attach human-readable labels for display
-    labeled_weights = {
-        TOPIC_LABELS.get(k, k): v for k, v in weights.items()
-    }
+    labeled_weights = {TOPIC_LABELS.get(k, k): v for k, v in weights.items()}
 
     return jsonify({
         "skill_before":    skill_update["old_skill"],
